@@ -1,0 +1,850 @@
+name: Build Custom ROM Android Gaming
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    # ============================================================
+    # 1. CHECKOUT
+    # ============================================================
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+
+    # ============================================================
+    # 2. MAKSIMALKAN STORAGE
+    # ============================================================
+    - name: Maksimalkan Ruang Disk
+      run: |
+        echo "Menghapus software bawaan runner..."
+
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+
+        sudo docker image prune -a -f || true
+
+        echo "Storage setelah cleanup:"
+        df -h
+
+
+    # ============================================================
+    # 3. DEPENDENCIES
+    # ============================================================
+    - name: Install Dependensi Build Android
+      run: |
+        sudo apt-get update
+
+        sudo apt-get install -y \
+          bc \
+          bison \
+          build-essential \
+          ccache \
+          curl \
+          flex \
+          g++-multilib \
+          gcc-multilib \
+          git \
+          git-lfs \
+          gnupg \
+          gperf \
+          imagemagick \
+          lib32readline-dev \
+          lib32z1-dev \
+          libelf-dev \
+          liblz4-tool \
+          libsdl1.2-dev \
+          libssl-dev \
+          libxml2 \
+          libxml2-utils \
+          lzop \
+          pngcrush \
+          rsync \
+          schedtool \
+          squashfs-tools \
+          xsltproc \
+          zip \
+          zlib1g-dev \
+          repo
+
+        git lfs install
+
+
+    # ============================================================
+    # 4. GIT CONFIG
+    # ============================================================
+    - name: Konfigurasi Git
+      run: |
+        git config --global user.name "RAFDS3"
+        git config --global user.email "wistaramahija3@gmail.com"
+
+
+    # ============================================================
+    # 5. INIT AOSP ANDROID 15
+    # ============================================================
+    - name: Inisialisasi AOSP Android 15
+      run: |
+        mkdir -p android
+        cd android
+
+        repo init \
+          -u https://android.googlesource.com/platform/manifest \
+          -b android-15.0.0_r21 \
+          --git-lfs \
+          --depth=1
+
+
+    # ============================================================
+    # 6. SYNC AOSP
+    # ============================================================
+    - name: Sinkronisasi Kode Sumber
+      run: |
+        cd android
+
+        repo sync \
+          -c \
+          -j$(nproc --all) \
+          --force-sync \
+          --no-clone-bundle \
+          --no-tags
+
+
+    # ============================================================
+    # 7. DEVICE TREE
+    # ============================================================
+    - name: Clone Device Tree Xiaomi Topaz
+      run: |
+        cd android
+
+        # GANTI URL INI DENGAN DEVICE TREE TOPAZ ANDA
+        git clone \
+          https://github.com/REPOSITORY-DEVICE-TREE.git \
+          -b android-15 \
+          device/xiaomi/topaz
+
+
+    # ============================================================
+    # 8. VENDOR TREE
+    # ============================================================
+    - name: Clone Vendor Tree Xiaomi Topaz
+      run: |
+        cd android
+
+        # GANTI URL INI DENGAN VENDOR TREE TOPAZ ANDA
+        git clone \
+          https://github.com/REPOSITORY-VENDOR-TREE.git \
+          -b android-15 \
+          vendor/xiaomi/topaz
+
+
+    # ============================================================
+    # 9. KERNEL TREE
+    # ============================================================
+    - name: Clone Kernel Xiaomi Topaz
+      run: |
+        cd android
+
+        # GANTI URL INI DENGAN KERNEL TREE TOPAZ ANDA
+        git clone \
+          https://github.com/REPOSITORY-KERNEL-TREE.git \
+          -b android-15 \
+          kernel/xiaomi/topaz
+
+
+    # ============================================================
+    # 10. BUAT GAMING BOOSTER APP
+    # ============================================================
+    - name: Membuat Gaming Booster
+      run: |
+        cd android
+
+        echo "Membuat Gaming Booster..."
+
+        mkdir -p packages/apps/GamingBooster/src/com/rafds3/gamingbooster
+        mkdir -p packages/apps/GamingBooster/res/values
+
+
+        # --------------------------------------------------------
+        # Android.bp
+        # --------------------------------------------------------
+
+        cat > packages/apps/GamingBooster/Android.bp <<'EOF'
+        android_app {
+            name: "GamingBooster",
+
+            srcs: [
+                "src/**/*.java",
+            ],
+
+            resource_dirs: [
+                "res",
+            ],
+
+            manifest: "AndroidManifest.xml",
+
+            platform_apis: true,
+
+            privileged: true,
+
+            certificate: "platform",
+
+            optimize: {
+                enabled: true,
+            },
+
+            dex_preopt: {
+                enabled: true,
+            },
+        }
+        EOF
+
+
+        # --------------------------------------------------------
+        # AndroidManifest.xml
+        # --------------------------------------------------------
+
+        cat > packages/apps/GamingBooster/AndroidManifest.xml <<'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="com.rafds3.gamingbooster">
+
+            <uses-permission
+                android:name="android.permission.WAKE_LOCK" />
+
+            <uses-permission
+                android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+
+            <uses-permission
+                android:name="android.permission.PACKAGE_USAGE_STATS" />
+
+            <application
+                android:label="@string/app_name"
+                android:theme="@android:style/Theme.Material.NoActionBar"
+                android:allowBackup="false"
+                android:supportsRtl="true">
+
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+
+                        <category
+                            android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+
+                </activity>
+
+            </application>
+
+        </manifest>
+        EOF
+
+
+        # --------------------------------------------------------
+        # strings.xml
+        # --------------------------------------------------------
+
+        cat > packages/apps/GamingBooster/res/values/strings.xml <<'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+
+        <resources>
+
+            <string name="app_name">Gaming Booster</string>
+
+        </resources>
+        EOF
+
+
+        # --------------------------------------------------------
+        # MainActivity.java
+        # --------------------------------------------------------
+
+        cat > packages/apps/GamingBooster/src/com/rafds3/gamingbooster/MainActivity.java <<'EOF'
+        package com.rafds3.gamingbooster;
+
+        import android.app.Activity;
+        import android.app.ActivityManager;
+        import android.content.Context;
+        import android.content.pm.ApplicationInfo;
+        import android.content.pm.PackageManager;
+        import android.os.Bundle;
+        import android.os.PowerManager;
+        import android.view.Gravity;
+        import android.view.Window;
+        import android.view.WindowManager;
+        import android.widget.Button;
+        import android.widget.LinearLayout;
+        import android.widget.ScrollView;
+        import android.widget.TextView;
+
+        import java.util.List;
+
+        public class MainActivity extends Activity {
+
+            private boolean gamingMode = false;
+
+            private PowerManager.WakeLock wakeLock;
+
+            private TextView statusText;
+
+
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+
+                super.onCreate(savedInstanceState);
+
+                createInterface();
+            }
+
+
+            private void createInterface() {
+
+                ScrollView scrollView =
+                        new ScrollView(this);
+
+
+                LinearLayout root =
+                        new LinearLayout(this);
+
+                root.setOrientation(
+                        LinearLayout.VERTICAL
+                );
+
+                root.setPadding(
+                        40,
+                        50,
+                        40,
+                        40
+                );
+
+
+                TextView title =
+                        new TextView(this);
+
+                title.setText(
+                        "🎮 Gaming Booster"
+                );
+
+                title.setTextSize(30);
+
+                title.setGravity(
+                        Gravity.CENTER
+                );
+
+                root.addView(title);
+
+
+                TextView subtitle =
+                        new TextView(this);
+
+                subtitle.setText(
+                        "\nAndroid 15 Gaming Optimization\n" +
+                        "Xiaomi Redmi Note 12 4G"
+                );
+
+                subtitle.setTextSize(16);
+
+                subtitle.setGravity(
+                        Gravity.CENTER
+                );
+
+                root.addView(subtitle);
+
+
+                statusText =
+                        new TextView(this);
+
+                statusText.setText(
+                        "\nStatus: NORMAL"
+                );
+
+                statusText.setTextSize(18);
+
+                root.addView(statusText);
+
+
+                Button gamingButton =
+                        new Button(this);
+
+                gamingButton.setText(
+                        "ACTIVATE GAMING MODE"
+                );
+
+
+                gamingButton.setOnClickListener(
+                        v -> {
+
+                            if (!gamingMode) {
+
+                                activateGamingMode();
+
+                                gamingButton.setText(
+                                        "DISABLE GAMING MODE"
+                                );
+
+                            } else {
+
+                                disableGamingMode();
+
+                                gamingButton.setText(
+                                        "ACTIVATE GAMING MODE"
+                                );
+                            }
+
+                        }
+                );
+
+
+                root.addView(gamingButton);
+
+
+                Button refreshButton =
+                        new Button(this);
+
+                refreshButton.setText(
+                        "HIGH REFRESH RATE"
+                );
+
+
+                refreshButton.setOnClickListener(
+                        v -> setHighRefreshRate()
+                );
+
+
+                root.addView(refreshButton);
+
+
+                Button cleanButton =
+                        new Button(this);
+
+                cleanButton.setText(
+                        "CLEAN BACKGROUND APPS"
+                );
+
+
+                cleanButton.setOnClickListener(
+                        v -> cleanBackgroundApps()
+                );
+
+
+                root.addView(cleanButton);
+
+
+                Button screenButton =
+                        new Button(this);
+
+                screenButton.setText(
+                        "KEEP SCREEN ON"
+                );
+
+
+                screenButton.setOnClickListener(
+                        v -> {
+
+                            getWindow().addFlags(
+                                WindowManager.LayoutParams
+                                .FLAG_KEEP_SCREEN_ON
+                            );
+
+                        }
+                );
+
+
+                root.addView(screenButton);
+
+
+                Button normalButton =
+                        new Button(this);
+
+                normalButton.setText(
+                        "NORMAL MODE"
+                );
+
+
+                normalButton.setOnClickListener(
+                        v -> {
+
+                            disableGamingMode();
+
+                            getWindow().clearFlags(
+                                WindowManager.LayoutParams
+                                .FLAG_KEEP_SCREEN_ON
+                            );
+
+                        }
+                );
+
+
+                root.addView(normalButton);
+
+
+                TextView info =
+                        new TextView(this);
+
+
+                info.setText(
+                        "\n\nGAMING FEATURES\n\n" +
+
+                        "🎮 Gaming Mode\n" +
+
+                        "⚡ Performance Mode\n" +
+
+                        "📱 High Refresh Rate\n" +
+
+                        "🧹 Background Cleanup\n" +
+
+                        "🔒 Screen Keep Awake\n" +
+
+                        "🔋 Gaming Wake Lock\n\n" +
+
+                        "Performance depends on " +
+                        "hardware, kernel and thermal limits."
+                );
+
+
+                info.setTextSize(15);
+
+                root.addView(info);
+
+
+                scrollView.addView(root);
+
+                setContentView(scrollView);
+            }
+
+
+            private void activateGamingMode() {
+
+                gamingMode = true;
+
+                statusText.setText(
+                        "\nStatus: GAMING MODE ACTIVE"
+                );
+
+                acquireWakeLock();
+
+                setHighRefreshRate();
+            }
+
+
+            private void disableGamingMode() {
+
+                gamingMode = false;
+
+                statusText.setText(
+                        "\nStatus: NORMAL"
+                );
+
+                releaseWakeLock();
+            }
+
+
+            private void acquireWakeLock() {
+
+                PowerManager powerManager =
+                        (PowerManager)
+                        getSystemService(
+                                Context.POWER_SERVICE
+                        );
+
+
+                if (powerManager == null) {
+                    return;
+                }
+
+
+                wakeLock =
+                        powerManager.newWakeLock(
+                                PowerManager.PARTIAL_WAKE_LOCK,
+                                "GamingBooster:Gaming"
+                        );
+
+
+                wakeLock.acquire();
+            }
+
+
+            private void releaseWakeLock() {
+
+                if (wakeLock != null &&
+                    wakeLock.isHeld()) {
+
+                    wakeLock.release();
+                }
+
+                wakeLock = null;
+            }
+
+
+            private void setHighRefreshRate() {
+
+                if (android.os.Build.VERSION.SDK_INT < 30) {
+                    return;
+                }
+
+
+                try {
+
+                    Window window =
+                            getWindow();
+
+
+                    WindowManager wm =
+                            (WindowManager)
+                            getSystemService(
+                                    Context.WINDOW_SERVICE
+                            );
+
+
+                    if (wm == null) {
+                        return;
+                    }
+
+
+                    android.view.Display display =
+                            wm.getDefaultDisplay();
+
+
+                    android.view.Display.Mode[] modes =
+                            display.getSupportedModes();
+
+
+                    if (modes == null ||
+                        modes.length == 0) {
+
+                        return;
+                    }
+
+
+                    android.view.Display.Mode best =
+                            modes[0];
+
+
+                    for (
+                        android.view.Display.Mode mode :
+                        modes
+                    ) {
+
+                        if (
+                            mode.getRefreshRate()
+                            > best.getRefreshRate()
+                        ) {
+
+                            best = mode;
+                        }
+                    }
+
+
+                    WindowManager.LayoutParams params =
+                            window.getAttributes();
+
+
+                    params.preferredDisplayModeId =
+                            best.getModeId();
+
+
+                    window.setAttributes(params);
+
+                } catch (Exception ignored) {
+                }
+            }
+
+
+            private void cleanBackgroundApps() {
+
+                ActivityManager am =
+                        (ActivityManager)
+                        getSystemService(
+                                Context.ACTIVITY_SERVICE
+                        );
+
+
+                if (am == null) {
+                    return;
+                }
+
+
+                PackageManager pm =
+                        getPackageManager();
+
+
+                List<ApplicationInfo> apps =
+                        pm.getInstalledApplications(
+                                PackageManager.GET_META_DATA
+                        );
+
+
+                for (
+                    ApplicationInfo app :
+                    apps
+                ) {
+
+                    String packageName =
+                            app.packageName;
+
+
+                    if (
+                        packageName.equals(
+                                getPackageName()
+                        )
+                    ) {
+                        continue;
+                    }
+
+
+                    try {
+
+                        am.killBackgroundProcesses(
+                                packageName
+                        );
+
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+
+
+            @Override
+            protected void onDestroy() {
+
+                releaseWakeLock();
+
+                super.onDestroy();
+            }
+        }
+        EOF
+
+
+        echo "Gaming Booster berhasil dibuat."
+
+
+    # ============================================================
+    # 11. MASUKKAN GAMING BOOSTER KE PRODUCT
+    # ============================================================
+    - name: Integrasi Gaming Booster ke Device Tree
+      run: |
+        cd android
+
+        DEVICE_MK="device/xiaomi/topaz/device.mk"
+
+        if [ -f "$DEVICE_MK" ]; then
+
+          echo "" >> "$DEVICE_MK"
+          echo "# RAFDS3 Gaming Booster" >> "$DEVICE_MK"
+          echo "PRODUCT_PACKAGES += GamingBooster" >> "$DEVICE_MK"
+
+          echo "Gaming Booster ditambahkan ke $DEVICE_MK"
+
+        else
+
+          echo "device.mk tidak ditemukan."
+
+          echo "Mencari file konfigurasi Topaz..."
+
+          find device/xiaomi/topaz \
+            -maxdepth 2 \
+            -type f \
+            \( -name "*.mk" -o -name "*.bp" \) \
+            | head -50
+
+        fi
+
+
+    # ============================================================
+    # 12. GAMING TWEAKS
+    # ============================================================
+    - name: Konfigurasi Gaming Optimization
+      run: |
+        cd android
+
+        TARGET_PROP="device/xiaomi/topaz/system.prop"
+
+        if [ -f "$TARGET_PROP" ]; then
+
+          cat >> "$TARGET_PROP" <<'EOF'
+
+        # ========================================================
+        # RAFDS3 GAMING OPTIMIZATION
+        # ========================================================
+
+        # UI rendering
+        debug.sf.disable_backpressure=1
+
+        # Touch response
+        view.touch_slop=2
+
+        EOF
+
+          echo "Gaming optimization ditambahkan."
+
+        else
+
+          echo "system.prop tidak ditemukan."
+          echo "Melanjutkan build tanpa system.prop tweak."
+
+        fi
+
+
+    # ============================================================
+    # 13. CCACHE
+    # ============================================================
+    - name: Konfigurasi ccache
+      run: |
+        export USE_CCACHE=1
+
+        ccache -M 10G
+
+        ccache -s
+
+
+    # ============================================================
+    # 14. BUILD ANDROID
+    # ============================================================
+    - name: Build Android 15
+      run: |
+        cd android
+
+        source build/envsetup.sh
+
+        lunch aosp_topaz-userdebug
+
+        mka bacon -j$(nproc --all)
+
+
+    # ============================================================
+    # 15. CHECK OUTPUT
+    # ============================================================
+    - name: Cek Hasil Build
+      run: |
+        echo "Hasil build:"
+
+        find android/out/target/product \
+          -maxdepth 2 \
+          -type f \
+          \( -name "*.zip" -o -name "*.img" \) \
+          -print
+
+
+    # ============================================================
+    # 16. UPLOAD ROM
+    # ============================================================
+    - name: Upload Custom ROM
+      uses: actions/upload-artifact@v4
+
+      with:
+        name: Custom-ROM-Gaming-Topaz
+
+        path: |
+          android/out/target/product/*/*.zip
+          android/out/target/product/*/*.img
+
+        if-no-files-found: error
